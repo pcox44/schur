@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Schur Coloring Game</title>
+<style>
+  body{
+    margin:0;
+    font-family:system-ui,Segoe UI,Roboto,sans-serif;
+    background:#0f172a;
+    color:#f8fafc;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    padding:24px;
+  }
+  .game{
+    max-width:960px;
+    width:100%;
+    background:#111827;
+    border-radius:12px;
+    padding:20px;
+    box-shadow:0 6px 24px rgba(0,0,0,0.6);
+  }
+  h1{margin:0;font-size:22px}
+  p.desc{font-size:14px;color:#cbd5e1;margin:6px 0 16px;line-height:1.5}
+  label{font-size:13px;color:#94a3b8}
+  input{width:70px;padding:6px;border-radius:6px;border:1px solid #1f2937;background:#0f172a;color:white}
+  button{padding:8px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:600;}
+  button.play{background:#2563eb;color:white;}
+  button.reset{background:transparent;border:1px solid #334155;color:#94a3b8;}
+  .topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+  .leaderboard{
+    background:#0b1220;
+    border-radius:8px;
+    padding:10px;
+    font-size:14px;
+    color:#94a3b8;
+    margin-bottom:12px;
+  }
+  .leaderboard h2{margin:0 0 6px;font-size:15px;color:#e2e8f0}
+  .leaderboard table{width:100%;border-collapse:collapse}
+  .leaderboard td{padding:4px 6px;}
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(52px,1fr));
+    gap:8px;
+    margin-top:16px;
+  }
+  .cell{
+    height:64px;
+    border-radius:8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    font-weight:700;
+    color:#0f172a;
+    cursor:pointer;
+    border:3px solid #000;
+    transition:transform 0.1s;
+  }
+  .cell:hover{transform:scale(1.08);}
+  .viol{animation:shake 0.3s;}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .msg{margin-top:12px;font-size:15px}
+  .win{color:#4ade80;}
+  .lose{color:#f87171;}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .swatch{width:20px;height:20px;border-radius:4px;border:2px solid #000}
+  #graph{
+    margin-top:30px;
+    background:#111827;
+    border:1px solid #333;
+    border-radius:12px;
+    display:block;
+    margin-left:auto;
+    margin-right:auto;
+  }
+</style>
+</head>
+<body>
+<div class="game">
+  <h1>🎨 Schur Coloring Game</h1>
+  <p class="desc">
+    Try to color the numbers 1 through <strong>n</strong> with <strong>k colors</strong> so that no single color ever satisfies <code>a + b = c</code>.
+    In subtraction mode, the rule changes to <code>|a - b| = c</code>. Click numbers to cycle through colors and find a valid coloring!
+  </p>
+
+  <div class="leaderboard" id="leaderboard">
+    <h2>🏆 Leaderboard (Your Best Results)</h2>
+    <table id="lbTable"></table>
+  </div>
+
+  <div class="topbar">
+    <label>Colors <input id="colorCount" type="number" min="1" max="7" value="3"></label>
+    <label>n <input id="maxN" type="number" min="1" max="40" value="13"></label>
+    <label><input type="checkbox" id="subMode"> Subtraction Mode</label>
+    <button class="play" id="newGame">New Game</button>
+    <button class="reset" id="resetBtn">Reset</button>
+  </div>
+
+  <div id="legend" class="legend"></div>
+  <div id="grid" class="grid"></div>
+  <div id="msg" class="msg"></div>
+
+  <!-- Graph canvas -->
+  <canvas id="graph" width="600" height="600"></canvas>
+</div>
+
+<script>
+const colorset = ["#ef4444","#facc15","#22c55e","#3b82f6","#a855f7","#f97316","#14b8a6"];
+let n=13,k=3,gridEl,legendEl,msgEl,cells,colorOf;
+let leaderboardData = JSON.parse(localStorage.getItem("schurLeaderboard")||"{}");
+
+function updateLeaderboardDisplay(){
+  const lb=document.getElementById('lbTable');
+  lb.innerHTML="";
+  const keys=[...Array(7).keys()].map(x=>x+1);
+  keys.forEach(c=>{
+    const row=document.createElement('tr');
+    const td1=document.createElement('td');td1.textContent=c+" color"+(c>1?"s":"");
+    const td2=document.createElement('td');td2.textContent=leaderboardData[c]||"-";
+    row.appendChild(td1);row.appendChild(td2);
+    lb.appendChild(row);
+  });
+}
+updateLeaderboardDisplay();
+
+function saveLeaderboard(){
+  localStorage.setItem("schurLeaderboard",JSON.stringify(leaderboardData));
+  updateLeaderboardDisplay();
+}
+
+function buildGame(){
+  n=parseInt(document.getElementById('maxN').value)||13;
+  k=parseInt(document.getElementById('colorCount').value)||3;
+  gridEl=document.getElementById('grid');
+  legendEl=document.getElementById('legend');
+  msgEl=document.getElementById('msg');
+  gridEl.innerHTML='';
+  legendEl.innerHTML='';
+  colorOf=Array(n+1).fill(null);
+  for(let i=0;i<k;i++){
+    const e=document.createElement('div');
+    e.style.display='flex';e.style.alignItems='center';e.style.gap='6px';
+    const sw=document.createElement('div');
+    sw.className='swatch';
+    sw.style.background=colorset[i];
+    e.appendChild(sw);
+    const t=document.createElement('span');t.textContent=`Color ${i+1}`;
+    e.appendChild(t);
+    legendEl.appendChild(e);
+  }
+  cells=[];
+  for(let i=1;i<=n;i++){
+    const c=document.createElement('div');
+    c.className='cell';
+    c.textContent=i;
+    c.style.background="#e2e8f0";
+    c.dataset.num=i;
+    c.dataset.color="";
+    c.addEventListener('click',()=>cycleColor(i,c));
+    gridEl.appendChild(c);
+    cells[i]=c;
+  }
+  msgEl.textContent="Click numbers to assign colors. Avoid any single color satisfying the rule!";
+  msgEl.className='msg';
+  drawGraph();
+}
+
+function cycleColor(i,cell){
+  let current=colorOf[i];
+  if(current===null) current=-1;
+  current=(current+1)%k;
+  colorOf[i]=current;
+  cell.style.background=colorset[current];
+  checkViolations();
+}
+
+function checkViolations(){
+  const subMode = document.getElementById('subMode').checked;
+  cells.forEach(c=>{if(c)c.classList.remove('viol');});
+  let badTriples=[];
+  for(let a=1;a<=n;a++){
+    for(let b=1;b<=n;b++){
+      let c = subMode ? Math.abs(a-b) : a+b;
+      if(c>n || c<1) continue;
+      const ca=colorOf[a], cb=colorOf[b], cc=colorOf[c];
+      if(ca!==null && cb!==null && cc!==null && ca===cb && cb===cc){
+        badTriples.push([a,b,c]);
+      }
+    }
+  }
+  if(badTriples.length>0){
+    msgEl.textContent="❌ Violation: "+badTriples[0][0]+(subMode?" - ":" + ")+badTriples[0][1]+" = "+badTriples[0][2];
+    msgEl.className='msg lose';
+    badTriples[0].forEach(x=>cells[x].classList.add('viol'));
+  }else{
+    const allColored=colorOf.slice(1).every(x=>x!==null);
+    if(allColored){
+      msgEl.textContent="✅ You win! Perfect coloring!";
+      msgEl.className='msg win';
+      if(!leaderboardData[k] || n>leaderboardData[k]){
+        leaderboardData[k]=n;
+        saveLeaderboard();
+      }
+    }else{
+      msgEl.textContent="✅ No violations so far. Keep going!";
+      msgEl.className='msg';
+    }
+  }
+  drawGraph();
+}
+
+function drawGraph(){
+  const canvas=document.getElementById('graph');
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const cx=canvas.width/2, cy=canvas.height/2, r=250;
+  const points={};
+  for(let i=1;i<=n;i++){
+    const angle=2*Math.PI*(i-1)/n;
+    const x=cx+r*Math.cos(angle);
+    const y=cy+r*Math.sin(angle);
+    points[i]={x,y};
+  }
+
+  const subMode = document.getElementById('subMode').checked;
+
+  // Draw connections
+  for(let a=1;a<=n;a++){
+    for(let b=1;b<=n;b++){
+      let c = subMode ? Math.abs(a-b) : a+b;
+      if(c>n || c<1) continue;
+      const ca=colorOf[a], cb=colorOf[b], cc=colorOf[c];
+      if(ca!==null && cb!==null && cc!==null && ca===cb && cb===cc){
+        ctx.strokeStyle=colorset[ca];
+        ctx.beginPath();
+        ctx.moveTo(points[a].x, points[a].y);
+        ctx.lineTo(points[b].x, points[b].y);
+        ctx.lineTo(points[c].x, points[c].y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Draw points
+  for(let i=1;i<=n;i++){
+    ctx.fillStyle=colorOf[i]!==null?colorset[colorOf[i]]:"#e2e8f0";
+    ctx.beginPath();
+    ctx.arc(points[i].x, points[i].y, 10, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle="#000";
+    ctx.font="10px Arial";
+    ctx.fillText(i, points[i].x-4, points[i].y+4);
+  }
+}
+
+document.getElementById('newGame').addEventListener('click',buildGame);
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  colorOf.fill(null);
+  cells.forEach(c=>{if(c){c.style.background="#e2e8f0";c.classList.remove('viol');}});
+  checkViolations();
+});
+buildGame();
+</script>
+</body>
+</html>
