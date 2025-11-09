@@ -26,7 +26,7 @@
   h1{margin:0;font-size:22px}
   p.desc{font-size:14px;color:#cbd5e1;margin:6px 0 16px;line-height:1.5}
   label{font-size:13px;color:#94a3b8}
-  input{width:70px;padding:6px;border-radius:6px;border:1px solid #1f2937;background:#0f172a;color:white}
+  input, select{width:80px;padding:6px;border-radius:6px;border:1px solid #1f2937;background:#0f172a;color:white}
   button{padding:8px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:600;}
   button.play{background:#2563eb;color:white;}
   button.reset{background:transparent;border:1px solid #334155;color:#94a3b8;}
@@ -84,8 +84,9 @@
 <div class="game">
   <h1>🎨 Schur Coloring Game</h1>
   <p class="desc">
-    Try to color the numbers 1 through <strong>n</strong> with <strong>k colors</strong> so that no single color ever satisfies <code>a + b = c</code>.
-    In subtraction mode, the rule changes to <code>|a - b| = c</code>. Click numbers to cycle through colors and find a valid coloring!
+    Try to color the numbers 1 through <strong>n</strong> with <strong>k colors</strong> so that no single color ever satisfies a forbidden equation. 
+    Choose Addition (<code>a + b = c</code>), Subtraction (<code>|a - b| = c</code>), or Multiplication (<code>a × b = c</code>) mode (multiplication mode ignores 1x1=1). 
+    Click numbers to cycle through colors and find a valid coloring!
   </p>
 
   <div class="leaderboard" id="leaderboard">
@@ -96,7 +97,13 @@
   <div class="topbar">
     <label>Colors <input id="colorCount" type="number" min="1" max="7" value="3"></label>
     <label>n <input id="maxN" type="number" min="1" max="40" value="13"></label>
-    <label><input type="checkbox" id="subMode"> Subtraction Mode</label>
+    <label>Mode 
+      <select id="modeSelect">
+        <option value="addition">Addition</option>
+        <option value="subtraction">Subtraction</option>
+        <option value="multiplication">Multiplication</option>
+      </select>
+    </label>
     <button class="play" id="newGame">New Game</button>
     <button class="reset" id="resetBtn">Reset</button>
   </div>
@@ -113,12 +120,18 @@ const colorset = ["#ef4444","#facc15","#22c55e","#3b82f6","#a855f7","#f97316","#
 let n=13,k=3,gridEl,legendEl,msgEl,cells,colorOf;
 let leaderboardAdd = JSON.parse(localStorage.getItem("schurLeaderboardAdd")||"{}");
 let leaderboardSub = JSON.parse(localStorage.getItem("schurLeaderboardSub")||"{}");
+let leaderboardMul = JSON.parse(localStorage.getItem("schurLeaderboardMul")||"{}");
+
+function getMode(){ return document.getElementById('modeSelect').value; }
 
 function updateLeaderboardDisplay(){
   const lb=document.getElementById('lbTable');
   lb.innerHTML="";
-  const subMode = document.getElementById('subMode').checked;
-  const data = subMode ? leaderboardSub : leaderboardAdd;
+  const mode=getMode();
+  let data;
+  if(mode==="addition") data=leaderboardAdd;
+  else if(mode==="subtraction") data=leaderboardSub;
+  else if(mode==="multiplication") data=leaderboardMul;
   const keys=[...Array(7).keys()].map(x=>x+1);
   keys.forEach(c=>{
     const row=document.createElement('tr');
@@ -129,9 +142,10 @@ function updateLeaderboardDisplay(){
   });
 }
 
-function saveLeaderboard(){
+function saveLeaderboards(){
   localStorage.setItem("schurLeaderboardAdd", JSON.stringify(leaderboardAdd));
   localStorage.setItem("schurLeaderboardSub", JSON.stringify(leaderboardSub));
+  localStorage.setItem("schurLeaderboardMul", JSON.stringify(leaderboardMul));
   updateLeaderboardDisplay();
 }
 
@@ -144,6 +158,7 @@ function buildGame(){
   gridEl.innerHTML='';
   legendEl.innerHTML='';
   colorOf=Array(n+1).fill(null);
+
   for(let i=0;i<k;i++){
     const e=document.createElement('div');
     e.style.display='flex';e.style.alignItems='center';e.style.gap='6px';
@@ -155,6 +170,7 @@ function buildGame(){
     e.appendChild(t);
     legendEl.appendChild(e);
   }
+
   cells=[];
   for(let i=1;i<=n;i++){
     const c=document.createElement('div');
@@ -167,6 +183,7 @@ function buildGame(){
     gridEl.appendChild(c);
     cells[i]=c;
   }
+
   msgEl.textContent="Click numbers to assign colors. Avoid any single color satisfying the rule!";
   msgEl.className='msg';
   updateLeaderboardDisplay();
@@ -183,12 +200,16 @@ function cycleColor(i,cell){
 }
 
 function checkViolations(){
-  const subMode = document.getElementById('subMode').checked;
+  const mode=getMode();
   cells.forEach(c=>{if(c)c.classList.remove('viol');});
   let badTriples=[];
   for(let a=1;a<=n;a++){
     for(let b=1;b<=n;b++){
-      let c = subMode ? Math.abs(a-b) : a+b;
+      if(mode==="multiplication" && a===1 && b===1) continue; // skip 1x1
+      let c;
+      if(mode==="addition") c=a+b;
+      else if(mode==="subtraction") c=Math.abs(a-b);
+      else if(mode==="multiplication") c=a*b;
       if(c>n || c<1) continue;
       const ca=colorOf[a], cb=colorOf[b], cc=colorOf[c];
       if(ca!==null && cb!==null && cc!==null && ca===cb && cb===cc){
@@ -196,8 +217,9 @@ function checkViolations(){
       }
     }
   }
+
   if(badTriples.length>0){
-    msgEl.textContent="❌ Violation: "+badTriples[0][0]+(subMode?" - ":" + ")+badTriples[0][1]+" = "+badTriples[0][2];
+    msgEl.textContent="❌ Violation: "+badTriples[0][0]+(mode==="subtraction"?" - ":(mode==="multiplication"?" × ":" + "))+badTriples[0][1]+" = "+badTriples[0][2];
     msgEl.className='msg lose';
     badTriples[0].forEach(x=>cells[x].classList.add('viol'));
   }else{
@@ -205,15 +227,20 @@ function checkViolations(){
     if(allColored){
       msgEl.textContent="✅ You win! Perfect coloring!";
       msgEl.className='msg win';
-      if(subMode){
-        if(!leaderboardSub[k] || n>leaderboardSub[k]){
-          leaderboardSub[k]=n;
-          saveLeaderboard();
-        }
-      } else {
+      if(mode==="addition"){
         if(!leaderboardAdd[k] || n>leaderboardAdd[k]){
           leaderboardAdd[k]=n;
-          saveLeaderboard();
+          saveLeaderboards();
+        }
+      }else if(mode==="subtraction"){
+        if(!leaderboardSub[k] || n>leaderboardSub[k]){
+          leaderboardSub[k]=n;
+          saveLeaderboards();
+        }
+      }else if(mode==="multiplication"){
+        if(!leaderboardMul[k] || n>leaderboardMul[k]){
+          leaderboardMul[k]=n;
+          saveLeaderboards();
         }
       }
     }else{
@@ -237,12 +264,15 @@ function drawGraph(){
     points[i]={x,y};
   }
 
-  const subMode = document.getElementById('subMode').checked;
+  const mode=getMode();
 
-  // Draw connections for violations
   for(let a=1;a<=n;a++){
     for(let b=1;b<=n;b++){
-      let c = subMode ? Math.abs(a-b) : a+b;
+      if(mode==="multiplication" && a===1 && b===1) continue; // skip 1x1
+      let c;
+      if(mode==="addition") c=a+b;
+      else if(mode==="subtraction") c=Math.abs(a-b);
+      else if(mode==="multiplication") c=a*b;
       if(c>n || c<1) continue;
       const ca=colorOf[a], cb=colorOf[b], cc=colorOf[c];
       if(ca!==null && cb!==null && cc!==null && ca===cb && cb===cc){
@@ -256,7 +286,6 @@ function drawGraph(){
     }
   }
 
-  // Draw points
   for(let i=1;i<=n;i++){
     ctx.fillStyle=colorOf[i]!==null?colorset[colorOf[i]]:"#e2e8f0";
     ctx.beginPath();
@@ -274,7 +303,7 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
   cells.forEach(c=>{if(c){c.style.background="#e2e8f0";c.classList.remove('viol');}});
   checkViolations();
 });
-document.getElementById('subMode').addEventListener('change',updateLeaderboardDisplay);
+document.getElementById('modeSelect').addEventListener('change',updateLeaderboardDisplay);
 
 buildGame();
 </script>
