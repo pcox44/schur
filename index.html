@@ -105,31 +105,33 @@
   <div id="grid" class="grid"></div>
   <div id="msg" class="msg"></div>
 
-  <!-- Graph canvas -->
   <canvas id="graph" width="600" height="600"></canvas>
 </div>
 
 <script>
 const colorset = ["#ef4444","#facc15","#22c55e","#3b82f6","#a855f7","#f97316","#14b8a6"];
 let n=13,k=3,gridEl,legendEl,msgEl,cells,colorOf;
-let leaderboardData = JSON.parse(localStorage.getItem("schurLeaderboard")||"{}");
+let leaderboardAdd = JSON.parse(localStorage.getItem("schurLeaderboardAdd")||"{}");
+let leaderboardSub = JSON.parse(localStorage.getItem("schurLeaderboardSub")||"{}");
 
 function updateLeaderboardDisplay(){
   const lb=document.getElementById('lbTable');
   lb.innerHTML="";
+  const subMode = document.getElementById('subMode').checked;
+  const data = subMode ? leaderboardSub : leaderboardAdd;
   const keys=[...Array(7).keys()].map(x=>x+1);
   keys.forEach(c=>{
     const row=document.createElement('tr');
     const td1=document.createElement('td');td1.textContent=c+" color"+(c>1?"s":"");
-    const td2=document.createElement('td');td2.textContent=leaderboardData[c]||"-";
+    const td2=document.createElement('td');td2.textContent=data[c]||"-";
     row.appendChild(td1);row.appendChild(td2);
     lb.appendChild(row);
   });
 }
-updateLeaderboardDisplay();
 
 function saveLeaderboard(){
-  localStorage.setItem("schurLeaderboard",JSON.stringify(leaderboardData));
+  localStorage.setItem("schurLeaderboardAdd", JSON.stringify(leaderboardAdd));
+  localStorage.setItem("schurLeaderboardSub", JSON.stringify(leaderboardSub));
   updateLeaderboardDisplay();
 }
 
@@ -167,6 +169,7 @@ function buildGame(){
   }
   msgEl.textContent="Click numbers to assign colors. Avoid any single color satisfying the rule!";
   msgEl.className='msg';
+  updateLeaderboardDisplay();
   drawGraph();
 }
 
@@ -202,9 +205,16 @@ function checkViolations(){
     if(allColored){
       msgEl.textContent="✅ You win! Perfect coloring!";
       msgEl.className='msg win';
-      if(!leaderboardData[k] || n>leaderboardData[k]){
-        leaderboardData[k]=n;
-        saveLeaderboard();
+      if(subMode){
+        if(!leaderboardSub[k] || n>leaderboardSub[k]){
+          leaderboardSub[k]=n;
+          saveLeaderboard();
+        }
+      } else {
+        if(!leaderboardAdd[k] || n>leaderboardAdd[k]){
+          leaderboardAdd[k]=n;
+          saveLeaderboard();
+        }
       }
     }else{
       msgEl.textContent="✅ No violations so far. Keep going!";
@@ -229,7 +239,7 @@ function drawGraph(){
 
   const subMode = document.getElementById('subMode').checked;
 
-  // Draw connections
+  // Draw connections for violations
   for(let a=1;a<=n;a++){
     for(let b=1;b<=n;b++){
       let c = subMode ? Math.abs(a-b) : a+b;
@@ -264,6 +274,8 @@ document.getElementById('resetBtn').addEventListener('click',()=>{
   cells.forEach(c=>{if(c){c.style.background="#e2e8f0";c.classList.remove('viol');}});
   checkViolations();
 });
+document.getElementById('subMode').addEventListener('change',updateLeaderboardDisplay);
+
 buildGame();
 </script>
 </body>
