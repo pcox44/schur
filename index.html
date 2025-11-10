@@ -85,7 +85,7 @@
   <h1>🎨 Schur Coloring Game</h1>
   <p class="desc">
     Try to color the numbers 1 through <strong>n</strong> with <strong>k colors</strong> so that no single color ever satisfies a forbidden equation. 
-    Choose Addition (<code>a + b = c</code>), Subtraction (<code>|a - b| = c</code>), or Multiplication (<code>a × b = c</code>) mode (multiplication mode ignores 1x1=1). 
+    Choose Addition (<code>a + b = c</code>) or Multiplication (<code>a × b = c</code>) mode (multiplication mode ignores 1x1=1). 
     Click numbers to cycle through colors and find a valid coloring!
   </p>
 
@@ -100,7 +100,6 @@
     <label>Mode 
       <select id="modeSelect">
         <option value="addition">Addition</option>
-        <option value="subtraction">Subtraction</option>
         <option value="multiplication">Multiplication</option>
       </select>
     </label>
@@ -119,7 +118,6 @@
 const colorset = ["#ef4444","#facc15","#22c55e","#3b82f6","#a855f7","#f97316","#14b8a6"];
 let n=13,k=3,gridEl,legendEl,msgEl,cells,colorOf;
 let leaderboardAdd = JSON.parse(localStorage.getItem("schurLeaderboardAdd")||"{}");
-let leaderboardSub = JSON.parse(localStorage.getItem("schurLeaderboardSub")||"{}");
 let leaderboardMul = JSON.parse(localStorage.getItem("schurLeaderboardMul")||"{}");
 
 function getMode(){ return document.getElementById('modeSelect').value; }
@@ -128,10 +126,7 @@ function updateLeaderboardDisplay(){
   const lb=document.getElementById('lbTable');
   lb.innerHTML="";
   const mode=getMode();
-  let data;
-  if(mode==="addition") data=leaderboardAdd;
-  else if(mode==="subtraction") data=leaderboardSub;
-  else if(mode==="multiplication") data=leaderboardMul;
+  let data = mode==="addition" ? leaderboardAdd : leaderboardMul;
   const keys=[...Array(7).keys()].map(x=>x+1);
   keys.forEach(c=>{
     const row=document.createElement('tr');
@@ -144,7 +139,6 @@ function updateLeaderboardDisplay(){
 
 function saveLeaderboards(){
   localStorage.setItem("schurLeaderboardAdd", JSON.stringify(leaderboardAdd));
-  localStorage.setItem("schurLeaderboardSub", JSON.stringify(leaderboardSub));
   localStorage.setItem("schurLeaderboardMul", JSON.stringify(leaderboardMul));
   updateLeaderboardDisplay();
 }
@@ -205,11 +199,8 @@ function checkViolations(){
   let badTriples=[];
   for(let a=1;a<=n;a++){
     for(let b=1;b<=n;b++){
-      if(mode==="multiplication" && a===1 && b===1) continue; // skip 1x1
-      let c;
-      if(mode==="addition") c=a+b;
-      else if(mode==="subtraction") c=Math.abs(a-b);
-      else if(mode==="multiplication") c=a*b;
+      if(mode==="multiplication" && a===1 && b===1) continue;
+      let c = mode==="addition" ? a+b : a*b;
       if(c>n || c<1) continue;
       const ca=colorOf[a], cb=colorOf[b], cc=colorOf[c];
       if(ca!==null && cb!==null && cc!==null && ca===cb && cb===cc){
@@ -219,7 +210,8 @@ function checkViolations(){
   }
 
   if(badTriples.length>0){
-    msgEl.textContent="❌ Violation: "+badTriples[0][0]+(mode==="subtraction"?" - ":(mode==="multiplication"?" × ":" + "))+badTriples[0][1]+" = "+badTriples[0][2];
+    const modeSym = mode==="multiplication"?" × ":" + ";
+    msgEl.textContent="❌ Violation: "+badTriples[0][0]+modeSym+badTriples[0][1]+" = "+badTriples[0][2];
     msgEl.className='msg lose';
     badTriples[0].forEach(x=>cells[x].classList.add('viol'));
   }else{
@@ -230,11 +222,6 @@ function checkViolations(){
       if(mode==="addition"){
         if(!leaderboardAdd[k] || n>leaderboardAdd[k]){
           leaderboardAdd[k]=n;
-          saveLeaderboards();
-        }
-      }else if(mode==="subtraction"){
-        if(!leaderboardSub[k] || n>leaderboardSub[k]){
-          leaderboardSub[k]=n;
           saveLeaderboards();
         }
       }else if(mode==="multiplication"){
@@ -268,11 +255,8 @@ function drawGraph(){
 
   for(let a=1;a<=n;a++){
     for(let b=1;b<=n;b++){
-      if(mode==="multiplication" && a===1 && b===1) continue; // skip 1x1
-      let c;
-      if(mode==="addition") c=a+b;
-      else if(mode==="subtraction") c=Math.abs(a-b);
-      else if(mode==="multiplication") c=a*b;
+      if(mode==="multiplication" && a===1 && b===1) continue;
+      let c = mode==="addition" ? a+b : a*b;
       if(c>n || c<1) continue;
       const ca=colorOf[a], cb=colorOf[b], cc=colorOf[c];
       if(ca!==null && cb!==null && cc!==null && ca===cb && cb===cc){
